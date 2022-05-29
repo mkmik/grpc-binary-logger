@@ -7,7 +7,7 @@ service Test {
   rpc TestServerStream(TestRequest) returns (stream TestServerStreamResponse);
 }
 
-message TestRequest { bool route_me = 1; }
+message TestRequest { uint64 question = 1; }
 
 message TestUnaryResponse { uint64 answer = 1; }
 

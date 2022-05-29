@@ -20,6 +20,10 @@ tonic = "0.7"
 tower = "0.4"
 grpc-binary-logger-proto = { path = "../grpc-binary-logger-proto" }
 
+[dev-dependencies]
+grpc-binary-logger-test-proto = { path = "../grpc-binary-logger-test-proto" }
+tokio-stream = { version = "0.1", features = ["net"] }
+
 [build-dependencies]
 prost-build = "0.10"
 tonic-build = "0.7"
