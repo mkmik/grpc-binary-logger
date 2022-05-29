@@ -1,0 +1,15 @@
+[package]
+name = "grpc-binary-logger-test-proto"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+prost = "0.10"
+prost-types = { version = "0.10", features = ["std"] }
+tonic = "0.7"
+
+[build-dependencies]
+prost-build = "0.10"
+tonic-build = "0.7"
