@@ -1,5 +1,6 @@
 [workspace]
 
 members = [
-  "grpc-binary-logger"
+  "grpc-binary-logger",
+  "grpc-binary-logger-proto",
 ]

@@ -16,13 +16,10 @@ pub use self::predicate::{NoReflection, Predicate};
 mod sink;
 pub use self::sink::Sink;
 
-pub mod proto {
-    tonic::include_proto!("grpc.binarylog.v1");
-}
-pub use proto::GrpcLogEntry;
-
 mod middleware;
 pub use middleware::BinaryLoggerLayer;
+
+pub use grpc_binary_logger_proto as proto;
 
 #[cfg(test)]
 mod tests {

@@ -13,7 +13,7 @@ use tonic::Code;
 use tonic::{body::BoxBody, Status};
 use tower::{Layer, Service};
 
-use crate::{proto, GrpcLogEntry, NoReflection, Predicate, Sink};
+use crate::{proto, NoReflection, Predicate, Sink};
 
 #[derive(Debug, Default, Clone)]
 pub struct BinaryLoggerLayer<K, P = NoReflection>
@@ -288,7 +288,7 @@ where
             *seq
         };
 
-        let common_entry = GrpcLogEntry {
+        let common_entry = proto::GrpcLogEntry {
             call_id: self.call_id,
             sequence_id_within_call,
             logger: proto::grpc_log_entry::Logger::Server as i32,
@@ -302,7 +302,7 @@ where
                 headers,
             } => {
                 let timeout = headers.grpc_timeout().map(Into::into);
-                GrpcLogEntry {
+                proto::GrpcLogEntry {
                     r#type: proto::grpc_log_entry::EventType::ClientHeader as i32,
                     payload: Some(proto::grpc_log_entry::Payload::ClientHeader(
                         proto::ClientHeader {
@@ -318,17 +318,17 @@ where
                     ..common_entry
                 }
             }
-            LogEntry::ClientMessage(body) => GrpcLogEntry {
+            LogEntry::ClientMessage(body) => proto::GrpcLogEntry {
                 r#type: proto::grpc_log_entry::EventType::ClientMessage as i32,
                 payload: Some(Self::message(body)),
                 ..common_entry
             },
-            LogEntry::ServerMessage(body) => GrpcLogEntry {
+            LogEntry::ServerMessage(body) => proto::GrpcLogEntry {
                 r#type: proto::grpc_log_entry::EventType::ServerMessage as i32,
                 payload: Some(Self::message(body)),
                 ..common_entry
             },
-            LogEntry::ServerTrailers(headers) => GrpcLogEntry {
+            LogEntry::ServerTrailers(headers) => proto::GrpcLogEntry {
                 r#type: proto::grpc_log_entry::EventType::ServerTrailer as i32,
                 payload: Some(proto::grpc_log_entry::Payload::Trailer(proto::Trailer {
                     status_code: headers.grpc_status() as u32,
