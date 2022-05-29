@@ -8,8 +8,8 @@ pub mod proto {
 }
 pub use proto::GrpcLogEntry;
 
-mod binary_logger;
-pub use binary_logger::BinaryLoggerLayer;
+mod middleware;
+pub use middleware::BinaryLoggerLayer;
 
 #[cfg(test)]
 mod tests {
