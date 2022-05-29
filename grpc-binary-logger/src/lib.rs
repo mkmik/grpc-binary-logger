@@ -1,15 +1,12 @@
-// TODO: once we split this up
-/*
 #![deny(rustdoc::broken_intra_doc_links, rust_2018_idioms)]
 #![warn(
     missing_copy_implementations,
-    missing_docs,
+//    missing_docs,
     clippy::explicit_iter_loop,
     clippy::future_not_send,
     clippy::use_self,
     clippy::clone_on_ref_ptr
 )]
-*/
 
 mod predicate;
 pub use self::predicate::{NoReflection, Predicate};

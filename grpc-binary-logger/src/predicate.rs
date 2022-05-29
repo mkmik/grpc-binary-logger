@@ -33,7 +33,7 @@ where
     }
 }
 
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone, Debug, Copy)]
 pub struct NoReflection;
 
 impl Predicate for NoReflection {
