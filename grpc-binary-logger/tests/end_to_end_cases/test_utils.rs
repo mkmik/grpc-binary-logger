@@ -1,10 +1,14 @@
 use futures::FutureExt;
 use grpc_binary_logger::{BinaryLoggerLayer, Sink};
+use grpc_binary_logger_proto::GrpcLogEntry;
 use grpc_binary_logger_test_proto::{
     test_client::TestClient,
     test_server::{self, TestServer},
 };
-use std::net::SocketAddr;
+use std::{
+    net::SocketAddr,
+    sync::{Arc, Mutex},
+};
 use tokio_stream::wrappers::TcpListenerStream;
 use tonic::transport::{Channel, Server};
 
@@ -64,5 +68,30 @@ impl Drop for Fixture {
         if let Err(e) = shutdown_tx.send(()) {
             eprintln!("error shutting down text fixture: {:?}", e);
         }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct RecordingSink {
+    log: Arc<Mutex<Vec<GrpcLogEntry>>>,
+}
+
+impl RecordingSink {
+    pub fn new() -> Self {
+        Self {
+            log: Default::default(),
+        }
+    }
+
+    /// Return a copy of the recorded log entries.
+    pub fn entries(&self) -> Vec<GrpcLogEntry> {
+        self.log.lock().unwrap().clone()
+    }
+}
+
+impl Sink for RecordingSink {
+    fn write(&self, data: GrpcLogEntry) {
+        let mut log = self.log.lock().expect("poisoned");
+        log.push(data);
     }
 }

@@ -23,6 +23,7 @@ grpc-binary-logger-proto = { path = "../grpc-binary-logger-proto" }
 [dev-dependencies]
 grpc-binary-logger-test-proto = { path = "../grpc-binary-logger-test-proto" }
 tokio-stream = { version = "0.1", features = ["net"] }
+assert_matches = "1"
 
 [build-dependencies]
 prost-build = "0.10"
