@@ -1,3 +1,6 @@
+pub mod predicate;
+pub use self::predicate::{NoReflection, Predicate};
+
 #[cfg(test)]
 mod tests {
     #[test]
