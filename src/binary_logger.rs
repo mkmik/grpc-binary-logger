@@ -13,15 +13,7 @@ use tonic::Code;
 use tonic::{body::BoxBody, Status};
 use tower::{Layer, Service};
 
-mod predicate;
-use self::predicate::{NoReflection, Predicate};
-pub mod sink;
-use self::sink::Sink;
-
-pub mod proto {
-    tonic::include_proto!("grpc.binarylog.v1");
-}
-use proto::GrpcLogEntry;
+use crate::{proto, GrpcLogEntry, NoReflection, Predicate, Sink};
 
 #[derive(Debug, Default, Clone)]
 pub struct BinaryLoggerLayer<K, P = NoReflection>
