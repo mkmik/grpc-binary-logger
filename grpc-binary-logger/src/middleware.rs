@@ -192,11 +192,12 @@ where
             headers: parts.headers.clone(),
             call: call.clone(),
         });
+        call.log(LogEntry::ServerHeaders(&parts.headers));
         if body.is_end_stream() {
             // When an grpc call doesn't produce any results (either because the result type
             // is empty or because it returns an error immediately), the BinaryLoggingBody
             // won't be able to log anything. We have to log the event here.
-            call.log(LogEntry::ServerTrailers(&parts.headers))
+            call.log(LogEntry::ServerTrailers(&HeaderMap::default()))
         }
         hyper::Response::from_parts(parts, body)
     }
@@ -261,6 +262,7 @@ enum LogEntry<'a> {
         headers: &'a HeaderMap,
     },
     ClientMessage(&'a Bytes),
+    ServerHeaders(&'a HeaderMap),
     ServerMessage(&'a Bytes),
     ServerTrailers(&'a HeaderMap),
 }
@@ -328,6 +330,15 @@ where
                 payload: Some(Self::message(body)),
                 ..common_entry
             },
+            LogEntry::ServerHeaders(headers) => proto::GrpcLogEntry {
+                r#type: proto::grpc_log_entry::EventType::ServerHeader as i32,
+                payload: Some(proto::grpc_log_entry::Payload::ServerHeader(
+                    proto::ServerHeader {
+                        metadata: Some(Self::metadata(headers)),
+                    },
+                )),
+                ..common_entry
+            },
             LogEntry::ServerMessage(body) => proto::GrpcLogEntry {
                 r#type: proto::grpc_log_entry::EventType::ServerMessage as i32,
                 payload: Some(Self::message(body)),
@@ -355,9 +366,6 @@ where
 
         const COMPRESSED_FLAG_FIELD_LEN: usize = 1;
         const MESSAGE_LENGTH_FIELD_LEN: usize = 4;
-        //        let mut bytes = bytes.clone(); // cheap
-        //        bytes.advance(COMPRESSED_FLAG_FIELD_LEN + MESSAGE_LENGTH_FIELD_LEN);
-        //        let data = bytes.to_vec();
         let data = bytes
             .clone() // cheap
             .into_iter()
