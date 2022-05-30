@@ -11,7 +11,7 @@ use grpc_binary_logger_proto::{
 };
 use grpc_binary_logger_test_proto::{TestRequest, TestUnaryResponse};
 use prost::Message as _;
-use tonic::metadata::MetadataValue;
+use tonic::{metadata::MetadataValue, Code};
 
 #[tokio::test]
 async fn test_unary() {
@@ -32,7 +32,6 @@ async fn test_unary() {
         assert_eq!(res.into_inner().answer, BASE + 1);
     }
 
-    // Figure out how to ensure that the sink is fully flushed!
     let entries = sink.entries();
     assert_eq!(entries.len(), 5);
 
@@ -42,7 +41,8 @@ async fn test_unary() {
         Some(Payload::ClientHeader(ClientHeader {
             ref method_name,
             metadata: Some(Metadata{ref entry}), ..
-        })) if method_name == "/test.Test/TestUnary" => {
+        })) => {
+            assert_eq!(method_name, "/test.Test/TestUnary");
             assert_matches!(entry[..], [
                 MetadataEntry{ref key, ref value, ..},
             ] if key == "my-client-header" && value == b"my-client-header-value");
@@ -52,8 +52,9 @@ async fn test_unary() {
     assert_eq!(entries[1].r#type(), EventType::ClientMessage);
     assert_matches!(
         entries[1].payload,
-        Some(Payload::Message(Message{length, ref data})) if data.len() == length as usize => {
-            let message = TestRequest::decode(Cursor::new(data)).unwrap();
+        Some(Payload::Message(Message{length, ref data})) => {
+            assert_eq!(data.len(), length as usize);
+            let message = TestRequest::decode(Cursor::new(data)).expect("valid proto");
             assert_eq!(message.question, BASE);
         }
     );
@@ -81,4 +82,33 @@ async fn test_unary() {
 
     assert_eq!(entries[4].r#type(), EventType::ServerTrailer);
     assert_matches!(entries[4].payload, Some(Payload::Trailer(Trailer { .. })));
+}
+
+#[tokio::test]
+async fn test_unary_error() {
+    let sink = RecordingSink::new();
+    let fixture = Fixture::new(TestService, sink.clone())
+        .await
+        .expect("fixture");
+
+    {
+        let mut client = fixture.client.clone();
+        let err = client
+            .test_unary(TestRequest { question: 42 })
+            .await
+            .expect_err("should fail");
+        assert_eq!(err.code(), Code::InvalidArgument);
+        assert_eq!(err.message(), "The Answer is not a question");
+    }
+
+    let entries = sink.entries();
+    assert_eq!(entries.len(), 4);
+
+    assert_eq!(entries[3].r#type(), EventType::ServerTrailer);
+    assert_matches!(
+        entries[3].payload,
+        Some(Payload::Trailer(Trailer { status_code, .. })) => {
+            assert_eq!(status_code, Code::InvalidArgument as u32);
+        }
+    );
 }

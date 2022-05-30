@@ -18,6 +18,11 @@ impl test_server::Test for TestService {
         request: Request<TestRequest>,
     ) -> Result<Response<TestUnaryResponse>, Status> {
         let request = request.into_inner();
+
+        if request.question == 42 {
+            return Err(Status::invalid_argument("The Answer is not a question"));
+        }
+
         let mut res = tonic::Response::new(TestUnaryResponse {
             answer: request.question + 1,
         });

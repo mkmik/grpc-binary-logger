@@ -197,7 +197,7 @@ where
             // When an grpc call doesn't produce any results (either because the result type
             // is empty or because it returns an error immediately), the BinaryLoggingBody
             // won't be able to log anything. We have to log the event here.
-            call.log(LogEntry::ServerTrailers(&HeaderMap::default()))
+            call.log(LogEntry::ServerTrailers(&parts.headers));
         }
         hyper::Response::from_parts(parts, body)
     }
