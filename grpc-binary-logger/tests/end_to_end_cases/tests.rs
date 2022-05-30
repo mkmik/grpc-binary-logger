@@ -35,9 +35,10 @@ async fn test_unary() {
     let entries = sink.entries();
     assert_eq!(entries.len(), 5);
 
-    assert_eq!(entries[0].r#type(), EventType::ClientHeader);
+    let entry = &entries[0];
+    assert_eq!(entry.r#type(), EventType::ClientHeader);
     assert_matches!(
-        entries[0].payload,
+        entry.payload,
         Some(Payload::ClientHeader(ClientHeader {
             ref method_name,
             metadata: Some(Metadata{ref entry}), ..
@@ -49,9 +50,10 @@ async fn test_unary() {
         }
     );
 
-    assert_eq!(entries[1].r#type(), EventType::ClientMessage);
+    let entry = &entries[1];
+    assert_eq!(entry.r#type(), EventType::ClientMessage);
     assert_matches!(
-        entries[1].payload,
+        entry.payload,
         Some(Payload::Message(Message{length, ref data})) => {
             assert_eq!(data.len(), length as usize);
             let message = TestRequest::decode(Cursor::new(data)).expect("valid proto");
@@ -59,9 +61,10 @@ async fn test_unary() {
         }
     );
 
-    assert_eq!(entries[2].r#type(), EventType::ServerHeader);
+    let entry = &entries[2];
+    assert_eq!(entry.r#type(), EventType::ServerHeader);
     assert_matches!(
-        entries[2].payload,
+        entry.payload,
         Some(Payload::ServerHeader(ServerHeader {
             metadata: Some(Metadata{ref entry}), ..
         })) => {
@@ -71,17 +74,20 @@ async fn test_unary() {
         }
     );
 
-    assert_eq!(entries[3].r#type(), EventType::ServerMessage);
+    let entry = &entries[3];
+    assert_eq!(entry.r#type(), EventType::ServerMessage);
     assert_matches!(
-        entries[3].payload,
-        Some(Payload::Message(Message{length, ref data})) if data.len() == length as usize => {
+        entry.payload,
+        Some(Payload::Message(Message{length, ref data})) => {
+            assert_eq!(data.len(), length as usize);
             let message = TestUnaryResponse::decode(Cursor::new(data)).unwrap();
             assert_eq!(message.answer, BASE+1);
         }
     );
 
-    assert_eq!(entries[4].r#type(), EventType::ServerTrailer);
-    assert_matches!(entries[4].payload, Some(Payload::Trailer(Trailer { .. })));
+    let entry = &entries[4];
+    assert_eq!(entry.r#type(), EventType::ServerTrailer);
+    assert_matches!(entry.payload, Some(Payload::Trailer(Trailer { .. })));
 }
 
 #[tokio::test]
@@ -104,9 +110,10 @@ async fn test_unary_error() {
     let entries = sink.entries();
     assert_eq!(entries.len(), 4);
 
-    assert_eq!(entries[3].r#type(), EventType::ServerTrailer);
+    let entry = &entries[3];
+    assert_eq!(entry.r#type(), EventType::ServerTrailer);
     assert_matches!(
-        entries[3].payload,
+        entry.payload,
         Some(Payload::Trailer(Trailer { status_code, .. })) => {
             assert_eq!(status_code, Code::InvalidArgument as u32);
         }
