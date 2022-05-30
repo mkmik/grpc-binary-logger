@@ -1,6 +1,6 @@
 use futures::Stream;
 use std::pin::Pin;
-use tonic::{Request, Response, Status};
+use tonic::{metadata::MetadataValue, Request, Response, Status};
 
 use grpc_binary_logger_test_proto::{
     test_server, TestRequest, TestServerStreamResponse, TestUnaryResponse,
@@ -18,9 +18,14 @@ impl test_server::Test for TestService {
         request: Request<TestRequest>,
     ) -> Result<Response<TestUnaryResponse>, Status> {
         let request = request.into_inner();
-        Ok(tonic::Response::new(TestUnaryResponse {
+        let mut res = tonic::Response::new(TestUnaryResponse {
             answer: request.question + 1,
-        }))
+        });
+        res.metadata_mut().insert(
+            "my-server-header",
+            MetadataValue::from_static("my-server-header-value"),
+        );
+        Ok(res)
     }
 
     type TestServerStreamStream = PinnedStream<TestServerStreamResponse>;
