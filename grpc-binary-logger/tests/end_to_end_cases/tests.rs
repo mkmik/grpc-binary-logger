@@ -1,3 +1,5 @@
+use std::io::Cursor;
+
 use crate::end_to_end_cases::{
     server::TestService,
     test_utils::{Fixture, RecordingSink},
@@ -5,9 +7,10 @@ use crate::end_to_end_cases::{
 use assert_matches::assert_matches;
 use grpc_binary_logger_proto::{
     grpc_log_entry::{EventType, Payload},
-    ClientHeader,
+    ClientHeader, Message,
 };
-use grpc_binary_logger_test_proto::TestRequest;
+use grpc_binary_logger_test_proto::{TestRequest, TestUnaryResponse};
+use prost::Message as _;
 
 #[tokio::test]
 async fn test_unary() {
@@ -16,8 +19,8 @@ async fn test_unary() {
         .await
         .expect("fixture");
 
+    const BASE: u64 = 1;
     {
-        const BASE: u64 = 1;
         let mut client = fixture.client.clone();
         let res = client
             .test_unary(TestRequest { question: BASE })
@@ -29,13 +32,29 @@ async fn test_unary() {
     // Figure out how to ensure that the sink is fully flushed!
     let entries = sink.entries();
     println!("Sink: {entries:?}");
-    assert_eq!(entries.len(), 5);
+    assert_eq!(entries.len(), 4);
     assert_eq!(entries[0].r#type(), EventType::ClientHeader);
     assert_matches!(
         entries[0].payload,
-        Some(Payload::ClientHeader(ClientHeader { ref method_name, .. })) => assert_eq!(method_name, "/test.Test/TestUnary")
+        Some(Payload::ClientHeader(ClientHeader { ref method_name, .. })) if method_name == "/test.Test/TestUnary"
     );
+
     assert_eq!(entries[1].r#type(), EventType::ClientMessage);
+    assert_matches!(
+        entries[1].payload,
+        Some(Payload::Message(Message{length, ref data})) if data.len() == length as usize => {
+            let message = TestRequest::decode(Cursor::new(data)).unwrap();
+            assert_eq!(message.question, BASE);
+        }
+    );
+
     println!("entres[2]: {:?}", entries[2]);
-    //    assert_eq!(entries[2].r#type(), EventType::ServerMessage);
+    assert_eq!(entries[2].r#type(), EventType::ServerMessage);
+    assert_matches!(
+        entries[2].payload,
+        Some(Payload::Message(Message{length, ref data})) if data.len() == length as usize => {
+            let message = TestUnaryResponse::decode(Cursor::new(data)).unwrap();
+            assert_eq!(message.answer, BASE+1);
+        }
+    );
 }

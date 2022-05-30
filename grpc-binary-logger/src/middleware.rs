@@ -149,7 +149,12 @@ where
                     Ok(buf) => {
                         // `data` returns an actual gRPC frames, even if it has been sent
                         // over multiple tcp segments and over multiple HTTP/2 DATA frames.
-                        call.log(LogEntry::ClientMessage(&buf));
+
+                        // TODO(mkm): figure out why the client produces a zero length chunk here.
+                        // Ignoring it seems to be the right thing to do.
+                        if buf.len() != 0 {
+                            call.log(LogEntry::ClientMessage(&buf));
+                        }
                         if sender.send_data(buf).await.is_err() {
                             sender.abort();
                             return;
@@ -343,9 +348,25 @@ where
     }
 
     fn message(bytes: &Bytes) -> proto::grpc_log_entry::Payload {
+        let compressed = bytes[0] == 1;
+        if compressed {
+            unimplemented!("grpc compressed messages");
+        }
+
+        const COMPRESSED_FLAG_FIELD_LEN: usize = 1;
+        const MESSAGE_LENGTH_FIELD_LEN: usize = 4;
+        //        let mut bytes = bytes.clone(); // cheap
+        //        bytes.advance(COMPRESSED_FLAG_FIELD_LEN + MESSAGE_LENGTH_FIELD_LEN);
+        //        let data = bytes.to_vec();
+        let data = bytes
+            .clone() // cheap
+            .into_iter()
+            .skip(COMPRESSED_FLAG_FIELD_LEN + MESSAGE_LENGTH_FIELD_LEN)
+            .collect::<Vec<_>>();
+
         proto::grpc_log_entry::Payload::Message(proto::Message {
-            length: bytes.len() as u32,
-            data: bytes.to_vec(),
+            length: data.len() as u32,
+            data,
         })
     }
 
