@@ -152,7 +152,7 @@ where
 
                         // TODO(mkm): figure out why the client produces a zero length chunk here.
                         // Ignoring it seems to be the right thing to do.
-                        if buf.len() != 0 {
+                        if !buf.is_empty() {
                             call.log(LogEntry::ClientMessage(&buf));
                         }
                         if sender.send_data(buf).await.is_err() {
