@@ -9,7 +9,7 @@ use grpc_binary_logger_proto::{
     grpc_log_entry::{EventType, Payload},
     ClientHeader, Message, Metadata, MetadataEntry, ServerHeader, Trailer,
 };
-use grpc_binary_logger_test_proto::{TestRequest, TestUnaryResponse};
+use grpc_binary_logger_test_proto::{TestRequest, TestResponse};
 use prost::Message as _;
 use tonic::{metadata::MetadataValue, Code};
 
@@ -80,7 +80,7 @@ async fn test_unary() {
         entry.payload,
         Some(Payload::Message(Message{length, ref data})) => {
             assert_eq!(data.len(), length as usize);
-            let message = TestUnaryResponse::decode(Cursor::new(data)).unwrap();
+            let message = TestResponse::decode(Cursor::new(data)).unwrap();
             assert_eq!(message.answer, BASE+1);
         }
     );

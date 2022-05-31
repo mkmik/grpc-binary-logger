@@ -3,12 +3,10 @@ syntax = "proto3";
 package test;
 
 service Test {
-  rpc TestUnary(TestRequest) returns (TestUnaryResponse);
-  rpc TestServerStream(TestRequest) returns (stream TestServerStreamResponse);
+  rpc TestUnary(TestRequest) returns (TestResponse);
+  rpc TestStream(TestRequest) returns (stream TestResponse);
 }
 
 message TestRequest { uint64 question = 1; }
 
-message TestUnaryResponse { uint64 answer = 1; }
-
-message TestServerStreamResponse { uint64 answer = 1; }
+message TestResponse { uint64 answer = 1; }

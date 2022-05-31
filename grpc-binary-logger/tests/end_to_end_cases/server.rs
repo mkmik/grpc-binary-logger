@@ -2,9 +2,7 @@ use futures::Stream;
 use std::pin::Pin;
 use tonic::{metadata::MetadataValue, Request, Response, Status};
 
-use grpc_binary_logger_test_proto::{
-    test_server, TestRequest, TestServerStreamResponse, TestUnaryResponse,
-};
+use grpc_binary_logger_test_proto::{test_server, TestRequest, TestResponse};
 
 #[derive(Debug, Clone, Copy)]
 pub struct TestService;
@@ -16,14 +14,14 @@ impl test_server::Test for TestService {
     async fn test_unary(
         &self,
         request: Request<TestRequest>,
-    ) -> Result<Response<TestUnaryResponse>, Status> {
+    ) -> Result<Response<TestResponse>, Status> {
         let request = request.into_inner();
 
         if request.question == 42 {
             return Err(Status::invalid_argument("The Answer is not a question"));
         }
 
-        let mut res = tonic::Response::new(TestUnaryResponse {
+        let mut res = tonic::Response::new(TestResponse {
             answer: request.question + 1,
         });
         res.metadata_mut().insert(
@@ -33,14 +31,14 @@ impl test_server::Test for TestService {
         Ok(res)
     }
 
-    type TestServerStreamStream = PinnedStream<TestServerStreamResponse>;
+    type TestStreamStream = PinnedStream<TestResponse>;
 
-    async fn test_server_stream(
+    async fn test_stream(
         &self,
         request: Request<TestRequest>,
-    ) -> Result<Response<Self::TestServerStreamStream>, Status> {
+    ) -> Result<Response<Self::TestStreamStream>, Status> {
         let request = request.into_inner();
-        let it = (0..=request.question).map(|answer| Ok(TestServerStreamResponse { answer }));
+        let it = (0..=request.question).map(|answer| Ok(TestResponse { answer }));
         Ok(tonic::Response::new(Box::pin(futures::stream::iter(it))))
     }
 }
