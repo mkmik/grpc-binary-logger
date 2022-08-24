@@ -308,7 +308,7 @@ where
                 authority,
                 headers,
             } => {
-                let timeout = headers.grpc_timeout().map(Into::into);
+                let timeout = headers.grpc_timeout().map(|t| t.try_into().unwrap());
                 proto::GrpcLogEntry {
                     r#type: proto::grpc_log_entry::EventType::ClientHeader as i32,
                     payload: Some(proto::grpc_log_entry::Payload::ClientHeader(
