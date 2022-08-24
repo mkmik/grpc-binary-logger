@@ -15,6 +15,7 @@ use tower::{Layer, Service};
 
 use crate::{proto, NoReflection, Predicate, Sink};
 
+/// Intercepts all gRPC frames, builds gRPC log entries and sends them to a [`Sink`].
 #[derive(Debug, Default, Clone)]
 pub struct BinaryLoggerLayer<K, P = NoReflection>
 where
@@ -28,6 +29,7 @@ impl<K> BinaryLoggerLayer<K, NoReflection>
 where
     K: Sink + Send + Sync,
 {
+    /// Creates
     pub fn new(sink: K) -> Self {
         Self {
             sink: Arc::new(sink),
