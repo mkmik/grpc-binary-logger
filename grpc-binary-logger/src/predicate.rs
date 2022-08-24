@@ -1,4 +1,3 @@
-use http::HeaderMap;
 use http_body::Body;
 
 /// A [`Predicate`] allows to filter requests before they get processed by a [`Sink`].
@@ -22,21 +21,7 @@ impl Predicate for LogAll {
     }
 }
 
-impl<F> Predicate for F
-where
-    F: Fn(&str, &HeaderMap) -> bool + Clone,
-{
-    fn should_log<B>(&self, req: &hyper::Request<B>) -> bool
-    where
-        B: Body,
-    {
-        let method = req.uri().path();
-        let headers = req.headers();
-        self(method, headers)
-    }
-}
-
-/// A [`Predicate`] that filters out all [gRPC server reflection](https://github.com/grpc/grpc/blob/master/doc/server-reflection.md) chatter.
+/// A [`Predicate`] that filters out all [gRPC server reflection](https://github.com/grpc/grpc/blob/master/doc/server-reflection.md)
 #[derive(Default, Clone, Debug, Copy)]
 pub struct NoReflection;
 

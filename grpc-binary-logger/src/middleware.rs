@@ -29,11 +29,19 @@ impl<K> BinaryLoggerLayer<K, NoReflection>
 where
     K: Sink + Send + Sync,
 {
-    /// Creates
+    /// Creates a new binary logger layer with the default predicate.
     pub fn new(sink: K) -> Self {
         Self {
             sink: Arc::new(sink),
             predicate: Default::default(),
+        }
+    }
+
+    /// Builds a new binary logger layer with the provided predicate.
+    pub fn with_predicate<P: Predicate>(self, predicate: P) -> BinaryLoggerLayer<K, P> {
+        BinaryLoggerLayer {
+            sink: self.sink,
+            predicate,
         }
     }
 }
