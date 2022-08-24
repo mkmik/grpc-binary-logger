@@ -25,32 +25,57 @@ impl Sink for DebugSink {
 /// Write binary log entries to a writer using the gRPC binary logging "framing format" (sadly undocumented),
 /// compatible with the official gRPC implementation (C/C++/Java/Go) and with the [binlog](https://github.com/mkmik/binlog) CLI tool.
 #[derive(Default, Debug)]
-pub struct FileSink<W>
+pub struct FileSink<W, E = StderrIOErrorLogger>
 where
     W: io::Write + Send,
+    E: IOErrorLogger,
 {
     writer: Arc<Mutex<W>>,
+    error_logger: E,
 }
 
-impl<W> Clone for FileSink<W>
+impl<W, E> Clone for FileSink<W, E>
 where
     W: io::Write + Send,
+    E: IOErrorLogger,
 {
     fn clone(&self) -> Self {
         Self {
             writer: Arc::clone(&self.writer),
+            error_logger: self.error_logger.clone(),
         }
     }
 }
 
-impl<W> FileSink<W>
+impl<W> FileSink<W, StderrIOErrorLogger>
 where
     W: io::Write + Send,
 {
     /// Create a new FileSink that writes to a [`std::io::Write`].
     pub fn new(writer: W) -> Self {
         let writer = Arc::new(Mutex::new(writer));
-        Self { writer }
+        let error_logger = StderrIOErrorLogger;
+        Self {
+            writer,
+            error_logger,
+        }
+    }
+}
+
+impl<W, E> FileSink<W, E>
+where
+    W: io::Write + Send,
+    E: IOErrorLogger,
+{
+    /// Convert into an existing [`FileSink`] into a [`FileSink`] with a specific error logger.
+    pub fn with_error_logger<E2>(self, error_logger: E2) -> FileSink<W, E2>
+    where
+        E2: IOErrorLogger,
+    {
+        FileSink {
+            writer: self.writer,
+            error_logger,
+        }
     }
 
     fn write_log_entry(&self, data: &GrpcLogEntry) -> std::io::Result<()> {
@@ -64,13 +89,36 @@ where
     }
 }
 
-impl<W> Sink for FileSink<W>
+impl<W, E> Sink for FileSink<W, E>
 where
     W: io::Write + Send,
+    E: IOErrorLogger,
 {
     fn write(&self, data: GrpcLogEntry) {
         if let Err(e) = self.write_log_entry(&data) {
             eprintln!("error writing binary log: {:?}", e);
         }
+    }
+}
+
+pub trait IOErrorLogger: Send + Sync + Clone {
+    fn log_error(&self, e: std::io::Error);
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct StderrIOErrorLogger;
+
+impl IOErrorLogger for StderrIOErrorLogger {
+    fn log_error(&self, e: std::io::Error) {
+        eprintln!("grpc binlog sink error: {:?}", e);
+    }
+}
+
+impl<F> IOErrorLogger for F
+where
+    F: Fn(std::io::Error) + Send + Sync + Clone,
+{
+    fn log_error(&self, e: std::io::Error) {
+        self(e)
     }
 }
