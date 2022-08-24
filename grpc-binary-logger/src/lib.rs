@@ -14,7 +14,7 @@
 mod predicate;
 pub use self::predicate::{NoReflection, Predicate};
 mod sink;
-pub use self::sink::{DebugSink, Sink};
+pub use self::sink::{DebugSink, FileSink, Sink};
 
 mod middleware;
 pub use middleware::BinaryLoggerLayer;

@@ -8,7 +8,7 @@ use pin_project::pin_project;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use tonic::Code;
 use tonic::{body::BoxBody, Status};
 use tower::{Layer, Service};
@@ -306,6 +306,7 @@ where
         };
 
         let common_entry = proto::GrpcLogEntry {
+            timestamp: Some(SystemTime::now().into()),
             call_id: self.call_id,
             sequence_id_within_call,
             logger: proto::grpc_log_entry::Logger::Server as i32,

@@ -1,5 +1,5 @@
 use futures::Stream;
-use grpc_binary_logger::{BinaryLoggerLayer, DebugSink};
+use grpc_binary_logger::{BinaryLoggerLayer, FileSink, NoReflection};
 use std::pin::Pin;
 use tonic::{metadata::MetadataValue, transport::Server, Request, Response, Status};
 
@@ -54,8 +54,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("TestService listening on {}", addr);
 
-    let sink = DebugSink::default();
+    let file = std::fs::File::create("/tmp/grpcgo_binarylog.bin")?;
+    let sink = FileSink::new(file);
+    // Create a binary logger with a given sink.
     let binlog_layer = BinaryLoggerLayer::new(sink);
+    // You can provide a custom predicate that selects requests that you want to be logged.
+    // The default NoReflection predicate filters out all gRPC reflection chatter.
+    let binlog_layer = binlog_layer.with_predicate(NoReflection);
 
     Server::builder()
         .layer(binlog_layer)
