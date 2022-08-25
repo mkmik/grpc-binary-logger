@@ -259,7 +259,7 @@ where
 struct BinaryLoggingBody<K, L>
 where
     K: Sink + Send + Sync,
-    L: ErrorLogger<K::Error>,
+    L: ErrorLogger<K::Error> + 'static,
 {
     #[pin]
     inner: BoxBody,
@@ -326,7 +326,7 @@ enum LogEntry<'a> {
 struct CallLogger<K, L>
 where
     K: Sink + Send + Sync,
-    L: ErrorLogger<K::Error>,
+    L: ErrorLogger<K::Error> + 'static,
 {
     call_id: u64,
     sequence: Arc<Mutex<u64>>,
@@ -415,7 +415,7 @@ where
                 ..common_entry
             },
         };
-        self.sink.write(log_entry, &*self.error_logger);
+        self.sink.write(log_entry, Arc::clone(&self.error_logger));
     }
 
     fn message(bytes: &Bytes) -> proto::grpc_log_entry::Payload {
