@@ -13,11 +13,11 @@ pub trait Sink: Clone + Send + Sync {
     /// The sink receives a [`GrpcLogEntry`] message for every gRPC frame captured by a [`BinaryLoggerLayer`].
     /// The sink owns the log entry and is encourage to process the log in the background without blocking the logger layer.
     /// Errors should be handled (e.g. logged) by the sink.
-    fn write(&self, data: GrpcLogEntry, error_logger: impl ErrorLogger<Self::Error>);
+    fn write(&self, data: GrpcLogEntry, error_logger: &impl ErrorLogger<Self::Error>);
 }
 
 /// Passed to a Sink to log errors.
-pub trait ErrorLogger<E> {
+pub trait ErrorLogger<E>: Clone + Send + Sync {
     /// Log error
     fn log_error(&self, error: E);
 }
@@ -30,6 +30,15 @@ impl<E> ErrorLogger<E> for NopErrorLogger {
     fn log_error(&self, _error: E) {}
 }
 
+impl<F, E> ErrorLogger<E> for F
+where
+    F: Fn(E) + Send + Sync + Clone,
+{
+    fn log_error(&self, error: E) {
+        self(error)
+    }
+}
+
 /// A simple [`Sink`] implementation that prints to stderr.
 #[derive(Default, Clone, Copy, Debug)]
 pub struct DebugSink;
@@ -37,7 +46,7 @@ pub struct DebugSink;
 impl Sink for DebugSink {
     type Error = ();
 
-    fn write(&self, data: GrpcLogEntry, _error_logger: impl ErrorLogger<Self::Error>) {
+    fn write(&self, data: GrpcLogEntry, _error_logger: &impl ErrorLogger<Self::Error>) {
         eprintln!("{:?}", data);
     }
 }
@@ -90,7 +99,7 @@ where
 {
     type Error = ();
 
-    fn write(&self, data: GrpcLogEntry, _error_logger: impl ErrorLogger<Self::Error>) {
+    fn write(&self, data: GrpcLogEntry, _error_logger: &impl ErrorLogger<Self::Error>) {
         if let Err(e) = self.write_log_entry(&data) {
             eprintln!("error writing binary log: {:?}", e);
         }

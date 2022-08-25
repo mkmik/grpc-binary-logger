@@ -54,6 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("TestService listening on {}", addr);
 
+    // Create a binary log sink that writes length delimited binary log entries.
     let file = std::fs::File::create("/tmp/grpcgo_binarylog.bin")?;
     let sink = FileSink::new(file);
     // Create a binary logger with a given sink.
@@ -61,6 +62,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // You can provide a custom predicate that selects requests that you want to be logged.
     // The default NoReflection predicate filters out all gRPC reflection chatter.
     let binlog_layer = binlog_layer.with_predicate(NoReflection);
+    // You can provide a custom logger.
+    let binlog_layer = binlog_layer.with_error_logger(|e| eprintln!("grpc binlog error: {:?}", e));
 
     Server::builder()
         .layer(binlog_layer)

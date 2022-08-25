@@ -5,6 +5,7 @@ use http::HeaderMap;
 use http_body::Body as HttpBody;
 use hyper::Body;
 use pin_project::pin_project;
+use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
@@ -13,20 +14,22 @@ use tonic::Code;
 use tonic::{body::BoxBody, Status};
 use tower::{Layer, Service};
 
-use crate::sink::NopErrorLogger;
-use crate::{proto, NoReflection, Predicate, Sink};
+use crate::sink::ErrorLogger;
+use crate::{proto, sink::NopErrorLogger, NoReflection, Predicate, Sink};
 
 /// Intercepts all gRPC frames, builds gRPC log entries and sends them to a [`Sink`].
 #[derive(Debug, Default, Clone)]
-pub struct BinaryLoggerLayer<K, P = NoReflection>
+pub struct BinaryLoggerLayer<K, P = NoReflection, L = NopErrorLogger>
 where
     K: Sink + Send + Sync,
+    L: ErrorLogger<K::Error>,
 {
     sink: Arc<K>,
     predicate: P,
+    error_logger: Arc<L>,
 }
 
-impl<K> BinaryLoggerLayer<K, NoReflection>
+impl<K> BinaryLoggerLayer<K, NoReflection, NopErrorLogger>
 where
     K: Sink + Send + Sync,
 {
@@ -35,51 +38,82 @@ where
         Self {
             sink: Arc::new(sink),
             predicate: Default::default(),
-        }
-    }
-
-    /// Builds a new binary logger layer with the provided predicate.
-    pub fn with_predicate<P: Predicate>(self, predicate: P) -> BinaryLoggerLayer<K, P> {
-        BinaryLoggerLayer {
-            sink: self.sink,
-            predicate,
+            error_logger: Arc::new(NopErrorLogger),
         }
     }
 }
 
-impl<S, K, P> Layer<S> for BinaryLoggerLayer<K, P>
+impl<K, P, L> BinaryLoggerLayer<K, P, L>
+where
+    K: Sink + Send + Sync,
+    P: Predicate,
+    L: ErrorLogger<K::Error>,
+{
+    /// Builds a new binary logger layer with the provided predicate.
+    pub fn with_predicate<P2: Predicate>(self, predicate: P2) -> BinaryLoggerLayer<K, P2, L> {
+        BinaryLoggerLayer {
+            sink: self.sink,
+            predicate,
+            error_logger: self.error_logger,
+        }
+    }
+
+    /// Builds a new binary logger layer with the provided error logger.
+    pub fn with_error_logger<L2: ErrorLogger<K::Error>>(
+        self,
+        error_logger: L2,
+    ) -> BinaryLoggerLayer<K, P, L2> {
+        BinaryLoggerLayer {
+            sink: self.sink,
+            predicate: self.predicate,
+            error_logger: Arc::new(error_logger),
+        }
+    }
+}
+
+impl<S, K, P, L> Layer<S> for BinaryLoggerLayer<K, P, L>
 where
     P: Predicate + Send,
     K: Sink + Send + Sync + 'static,
+    L: ErrorLogger<K::Error> + 'static,
 {
-    type Service = BinaryLoggerMiddleware<S, K, P>;
+    type Service = BinaryLoggerMiddleware<S, K, P, L>;
 
     fn layer(&self, service: S) -> Self::Service {
-        BinaryLoggerMiddleware::new(service, Arc::clone(&self.sink), self.predicate.clone())
+        BinaryLoggerMiddleware::new(
+            service,
+            Arc::clone(&self.sink),
+            self.predicate.clone(),
+            Arc::clone(&self.error_logger),
+        )
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct BinaryLoggerMiddleware<S, K, P>
+pub struct BinaryLoggerMiddleware<S, K, P, L>
 where
     K: Sink + Send + Sync,
+    L: ErrorLogger<K::Error>,
 {
     sink: Arc<K>,
     inner: S,
     predicate: P,
+    error_logger: Arc<L>,
     next_call_id: Arc<Mutex<u64>>,
 }
 
-impl<S, K, P> BinaryLoggerMiddleware<S, K, P>
+impl<S, K, P, L> BinaryLoggerMiddleware<S, K, P, L>
 where
     K: Sink + Send + Sync,
     P: Predicate + Send,
+    L: ErrorLogger<K::Error>,
 {
-    fn new(inner: S, sink: Arc<K>, predicate: P) -> Self {
+    fn new(inner: S, sink: Arc<K>, predicate: P, error_logger: Arc<L>) -> Self {
         Self {
             sink,
             inner,
             predicate,
+            error_logger,
             next_call_id: Default::default(),
         }
     }
@@ -91,12 +125,13 @@ where
     }
 }
 
-impl<S, K, P> Service<hyper::Request<Body>> for BinaryLoggerMiddleware<S, K, P>
+impl<S, K, P, L> Service<hyper::Request<Body>> for BinaryLoggerMiddleware<S, K, P, L>
 where
     S: Service<hyper::Request<Body>, Response = hyper::Response<BoxBody>> + Clone + Send + 'static,
     S::Future: Send + 'static,
     K: Sink + Send + Sync + 'static,
     P: Predicate + Send,
+    L: ErrorLogger<K::Error> + 'static,
 {
     type Response = S::Response;
     type Error = S::Error;
@@ -116,7 +151,11 @@ where
         if !self.predicate.should_log(&request) {
             Box::pin(async move { inner.call(request).await })
         } else {
-            let call = CallLogger::new(self.next_call_id(), Arc::clone(&self.sink));
+            let call = CallLogger::new(
+                self.next_call_id(),
+                Arc::clone(&self.sink),
+                Arc::clone(&self.error_logger),
+            );
             Box::pin(async move {
                 let uri = request.uri();
                 call.log(LogEntry::ClientHeaders {
@@ -138,11 +177,12 @@ where
     }
 }
 
-impl<S, K, P> BinaryLoggerMiddleware<S, K, P>
+impl<S, K, P, L> BinaryLoggerMiddleware<S, K, P, L>
 where
     K: Sink + Send + Sync + 'static,
+    L: ErrorLogger<K::Error> + 'static,
 {
-    fn logged_request(req: hyper::Request<Body>, call: CallLogger<K>) -> hyper::Request<Body> {
+    fn logged_request(req: hyper::Request<Body>, call: CallLogger<K, L>) -> hyper::Request<Body> {
         let (req_parts, mut req_body) = req.into_parts();
 
         // We *must* return a Request<Body> because that's what `inner` requires.
@@ -195,13 +235,14 @@ where
 
     fn logged_response(
         response: hyper::Response<BoxBody>,
-        call: CallLogger<K>,
+        call: CallLogger<K, L>,
     ) -> hyper::Response<BoxBody> {
         let (parts, inner) = response.into_parts();
         let body = BoxBody::new(BinaryLoggingBody {
             inner,
             headers: parts.headers.clone(),
             call: call.clone(),
+            _phantom_error_logger: PhantomData::default(),
         });
         call.log(LogEntry::ServerHeaders(&parts.headers));
         if body.is_end_stream() {
@@ -215,19 +256,22 @@ where
 }
 
 #[pin_project]
-struct BinaryLoggingBody<K>
+struct BinaryLoggingBody<K, L>
 where
     K: Sink + Send + Sync,
+    L: ErrorLogger<K::Error>,
 {
     #[pin]
     inner: BoxBody,
     headers: HeaderMap,
-    call: CallLogger<K>,
+    call: CallLogger<K, L>,
+    _phantom_error_logger: PhantomData<L>,
 }
 
-impl<K> HttpBody for BinaryLoggingBody<K>
+impl<K, L> HttpBody for BinaryLoggingBody<K, L>
 where
     K: Sink + Send + Sync,
+    L: ErrorLogger<K::Error>,
 {
     type Data = bytes::Bytes;
 
@@ -279,24 +323,28 @@ enum LogEntry<'a> {
 }
 
 #[derive(Clone)]
-struct CallLogger<K>
+struct CallLogger<K, L>
 where
     K: Sink + Send + Sync,
+    L: ErrorLogger<K::Error>,
 {
     call_id: u64,
     sequence: Arc<Mutex<u64>>,
     sink: Arc<K>,
+    error_logger: Arc<L>,
 }
 
-impl<K> CallLogger<K>
+impl<K, L> CallLogger<K, L>
 where
     K: Sink + Send + Sync,
+    L: ErrorLogger<K::Error>,
 {
-    fn new(call_id: u64, sink: Arc<K>) -> Self {
+    fn new(call_id: u64, sink: Arc<K>, error_logger: Arc<L>) -> Self {
         Self {
             call_id,
             sequence: Arc::new(Mutex::new(0)),
             sink,
+            error_logger,
         }
     }
     fn log(&self, entry: LogEntry<'_>) {
@@ -367,7 +415,7 @@ where
                 ..common_entry
             },
         };
-        self.sink.write(log_entry, NopErrorLogger);
+        self.sink.write(log_entry, &*self.error_logger);
     }
 
     fn message(bytes: &Bytes) -> proto::grpc_log_entry::Payload {

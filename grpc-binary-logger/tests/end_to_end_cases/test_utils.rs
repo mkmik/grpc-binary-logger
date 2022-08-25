@@ -92,7 +92,7 @@ impl RecordingSink {
 impl Sink for RecordingSink {
     type Error = ();
 
-    fn write(&self, data: GrpcLogEntry, _error_logger: impl sink::ErrorLogger<Self::Error>) {
+    fn write(&self, data: GrpcLogEntry, _error_logger: &impl sink::ErrorLogger<Self::Error>) {
         let mut log = self.log.lock().expect("poisoned");
         log.push(data);
     }
