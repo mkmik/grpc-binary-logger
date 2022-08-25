@@ -13,6 +13,7 @@ use tonic::Code;
 use tonic::{body::BoxBody, Status};
 use tower::{Layer, Service};
 
+use crate::sink::NopErrorLogger;
 use crate::{proto, NoReflection, Predicate, Sink};
 
 /// Intercepts all gRPC frames, builds gRPC log entries and sends them to a [`Sink`].
@@ -366,7 +367,7 @@ where
                 ..common_entry
             },
         };
-        self.sink.write(log_entry);
+        self.sink.write(log_entry, NopErrorLogger);
     }
 
     fn message(bytes: &Bytes) -> proto::grpc_log_entry::Payload {

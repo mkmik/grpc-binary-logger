@@ -13,7 +13,7 @@
 
 mod predicate;
 pub use self::predicate::{NoReflection, Predicate};
-mod sink;
+pub mod sink;
 pub use self::sink::{DebugSink, FileSink, Sink};
 
 mod middleware;

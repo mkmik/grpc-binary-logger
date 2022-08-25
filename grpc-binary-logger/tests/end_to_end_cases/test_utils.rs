@@ -1,5 +1,5 @@
 use futures::FutureExt;
-use grpc_binary_logger::{BinaryLoggerLayer, Sink};
+use grpc_binary_logger::{sink, BinaryLoggerLayer, Sink};
 use grpc_binary_logger_proto::GrpcLogEntry;
 use grpc_binary_logger_test_proto::{
     test_client::TestClient,
@@ -90,7 +90,9 @@ impl RecordingSink {
 }
 
 impl Sink for RecordingSink {
-    fn write(&self, data: GrpcLogEntry) {
+    type Error = ();
+
+    fn write(&self, data: GrpcLogEntry, _error_logger: impl sink::ErrorLogger<Self::Error>) {
         let mut log = self.log.lock().expect("poisoned");
         log.push(data);
     }
