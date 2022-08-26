@@ -13,7 +13,7 @@ pub trait Sink: Clone + Send + Sync {
     /// The sink receives a [`GrpcLogEntry`] message for every gRPC frame captured by a [`BinaryLoggerLayer`].
     /// The sink owns the log entry and is encourage to process the log in the background without blocking the logger layer.
     /// Errors should be handled (e.g. logged) by the sink.
-    fn write(&self, data: GrpcLogEntry, error_logger: Arc<impl ErrorLogger<Self::Error> + 'static>);
+    fn write(&self, data: GrpcLogEntry, error_logger: &impl ErrorLogger<Self::Error>);
 }
 
 /// Passed to a Sink to log errors.
@@ -46,7 +46,7 @@ pub struct DebugSink;
 impl Sink for DebugSink {
     type Error = ();
 
-    fn write(&self, data: GrpcLogEntry, _error_logger: Arc<impl ErrorLogger<Self::Error>>) {
+    fn write(&self, data: GrpcLogEntry, _error_logger: &impl ErrorLogger<Self::Error>) {
         eprintln!("{:?}", data);
     }
 }
@@ -97,16 +97,11 @@ impl<W> Sink for FileSink<W>
 where
     W: io::Write + Send,
 {
-    type Error = std::io::Error;
+    type Error = ();
 
-    fn write(
-        &self,
-        data: GrpcLogEntry,
-        error_logger: Arc<impl ErrorLogger<Self::Error> + 'static>,
-    ) {
-        let error_logger = Arc::clone(&error_logger);
+    fn write(&self, data: GrpcLogEntry, _error_logger: &impl ErrorLogger<Self::Error>) {
         if let Err(e) = self.write_log_entry(&data) {
-            error_logger.log_error(e)
+            eprintln!("error writing binary log: {:?}", e);
         }
     }
 }
