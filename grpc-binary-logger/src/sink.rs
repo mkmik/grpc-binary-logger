@@ -1,16 +1,16 @@
-//! gRPC binary log middleware layer writes binary logs into a [`Sink`].
+//! gRPC binary log middleware layer writes binary logs into a [`crate::Sink`].
 use super::proto::GrpcLogEntry;
 use byteorder::{BigEndian, WriteBytesExt};
 use prost::Message;
 use std::io;
 use std::sync::{Arc, Mutex};
 
-/// Receives [`GrpcLogEntry`] entries capturing all gRPC frames from a [`BinaryLoggerLayer`].
+/// Receives [`GrpcLogEntry`] entries capturing all gRPC frames from a [`crate::BinaryLoggerLayer`].
 pub trait Sink: Clone + Send + Sync {
     /// The type returned in the event of an error.
     type Error;
 
-    /// The sink receives a [`GrpcLogEntry`] message for every gRPC frame captured by a [`BinaryLoggerLayer`].
+    /// The sink receives a [`GrpcLogEntry`] message for every gRPC frame captured by a [`crate::BinaryLoggerLayer`].
     /// The sink owns the log entry and is encourage to process the log in the background without blocking the logger layer.
     /// Errors should be handled (e.g. logged) by the sink.
     fn write(&self, data: GrpcLogEntry, error_logger: impl ErrorLogger<Self::Error>);

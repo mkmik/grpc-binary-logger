@@ -1,4 +1,4 @@
-//! Implements a gRPC binary logger. See https://github.com/grpc/grpc/blob/master/doc/binary-logging.md
+//! Implements a gRPC binary logger. See <https://github.com/grpc/grpc/blob/master/doc/binary-logging.md>
 //!
 #![deny(rustdoc::broken_intra_doc_links, rust_2018_idioms)]
 #![warn(
