@@ -110,8 +110,9 @@ where
 mod tests {
     use super::*;
     use std::fmt;
+    use tokio::sync::mpsc::{self, Sender};
 
-    #[derive(Debug)]
+    #[derive(Debug, PartialEq, Eq)]
     struct DummyError;
 
     impl fmt::Display for DummyError {
@@ -132,26 +133,24 @@ mod tests {
     }
 
     #[derive(Debug, Clone)]
-    struct TestErrorLogger(Arc<Mutex<Option<DummyError>>>);
+    struct TestErrorLogger(Arc<Sender<DummyError>>);
 
-    impl TestErrorLogger {
-        fn new() -> Self {
-            Self(Arc::new(Mutex::new(None)))
-        }
-    }
-
+    /// Tests that error loggers can do weird stuff like spawning tokio tasks.
     impl ErrorLogger<DummyError> for TestErrorLogger {
         fn log_error(&self, error: DummyError) {
-            *self.0.lock().unwrap() = Some(error);
+            let tx = Arc::clone(&self.0);
+            tokio::spawn(async move { tx.send(error).await });
         }
     }
 
-    #[test]
-    fn test_sink_error() {
-        let error_logger = TestErrorLogger::new();
+    #[tokio::test]
+    async fn test_sink_error() {
+        let (tx, mut rx) = mpsc::channel(1);
+
+        let error_logger = TestErrorLogger(Arc::new(tx));
         let sink = FailingSink;
-        assert!(error_logger.0.lock().unwrap().is_none());
         sink.write(GrpcLogEntry::default(), error_logger.clone());
-        assert!(error_logger.0.lock().unwrap().is_some());
+
+        assert_eq!(rx.recv().await, Some(DummyError));
     }
 }
