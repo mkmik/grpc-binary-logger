@@ -126,11 +126,7 @@ mod tests {
     impl Sink for FailingSink {
         type Error = DummyError;
 
-        fn write(
-            &self,
-            _data: GrpcLogEntry,
-            error_logger: Arc<impl ErrorLogger<Self::Error> + 'static>,
-        ) {
+        fn write(&self, _data: GrpcLogEntry, error_logger: &impl ErrorLogger<Self::Error>) {
             error_logger.log_error(DummyError);
         }
     }
@@ -152,10 +148,10 @@ mod tests {
 
     #[test]
     fn test_sink_error() {
-        let error_logger = Arc::new(TestErrorLogger::new());
+        let error_logger = TestErrorLogger::new();
         let sink = FailingSink;
         assert!(error_logger.0.lock().unwrap().is_none());
-        sink.write(GrpcLogEntry::default(), Arc::clone(&error_logger));
+        sink.write(GrpcLogEntry::default(), &error_logger);
         assert!(error_logger.0.lock().unwrap().is_some());
     }
 }
