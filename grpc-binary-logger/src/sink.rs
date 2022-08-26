@@ -110,3 +110,57 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fmt;
+
+    #[derive(Debug)]
+    struct DummyError;
+
+    impl fmt::Display for DummyError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "dummy")
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    struct FailingSink;
+
+    impl Sink for FailingSink {
+        type Error = DummyError;
+
+        fn write(
+            &self,
+            _data: GrpcLogEntry,
+            error_logger: Arc<impl ErrorLogger<Self::Error> + 'static>,
+        ) {
+            error_logger.log_error(DummyError);
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    struct TestErrorLogger(Arc<Mutex<Option<DummyError>>>);
+
+    impl TestErrorLogger {
+        fn new() -> Self {
+            Self(Arc::new(Mutex::new(None)))
+        }
+    }
+
+    impl ErrorLogger<DummyError> for TestErrorLogger {
+        fn log_error(&self, error: DummyError) {
+            *self.0.lock().unwrap() = Some(error);
+        }
+    }
+
+    #[test]
+    fn test_sink_error() {
+        let error_logger = Arc::new(TestErrorLogger::new());
+        let sink = FailingSink;
+        assert!(error_logger.0.lock().unwrap().is_none());
+        sink.write(GrpcLogEntry::default(), Arc::clone(&error_logger));
+        assert!(error_logger.0.lock().unwrap().is_some());
+    }
+}
