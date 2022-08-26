@@ -26,7 +26,7 @@ where
 {
     sink: Arc<K>,
     predicate: P,
-    error_logger: Arc<L>,
+    error_logger: L,
 }
 
 impl<K> BinaryLoggerLayer<K, NoReflection, NopErrorLogger>
@@ -38,7 +38,7 @@ where
         Self {
             sink: Arc::new(sink),
             predicate: Default::default(),
-            error_logger: Arc::new(NopErrorLogger),
+            error_logger: NopErrorLogger,
         }
     }
 }
@@ -66,7 +66,7 @@ where
         BinaryLoggerLayer {
             sink: self.sink,
             predicate: self.predicate,
-            error_logger: Arc::new(error_logger),
+            error_logger,
         }
     }
 }
@@ -84,7 +84,7 @@ where
             service,
             Arc::clone(&self.sink),
             self.predicate.clone(),
-            Arc::clone(&self.error_logger),
+            self.error_logger.clone(),
         )
     }
 }
@@ -98,7 +98,7 @@ where
     sink: Arc<K>,
     inner: S,
     predicate: P,
-    error_logger: Arc<L>,
+    error_logger: L,
     next_call_id: Arc<Mutex<u64>>,
 }
 
@@ -108,7 +108,7 @@ where
     P: Predicate + Send,
     L: ErrorLogger<K::Error>,
 {
-    fn new(inner: S, sink: Arc<K>, predicate: P, error_logger: Arc<L>) -> Self {
+    fn new(inner: S, sink: Arc<K>, predicate: P, error_logger: L) -> Self {
         Self {
             sink,
             inner,
@@ -154,7 +154,7 @@ where
             let call = CallLogger::new(
                 self.next_call_id(),
                 Arc::clone(&self.sink),
-                Arc::clone(&self.error_logger),
+                self.error_logger.clone(),
             );
             Box::pin(async move {
                 let uri = request.uri();
@@ -331,7 +331,7 @@ where
     call_id: u64,
     sequence: Arc<Mutex<u64>>,
     sink: Arc<K>,
-    error_logger: Arc<L>,
+    error_logger: L,
 }
 
 impl<K, L> CallLogger<K, L>
@@ -339,7 +339,7 @@ where
     K: Sink + Send + Sync,
     L: ErrorLogger<K::Error>,
 {
-    fn new(call_id: u64, sink: Arc<K>, error_logger: Arc<L>) -> Self {
+    fn new(call_id: u64, sink: Arc<K>, error_logger: L) -> Self {
         Self {
             call_id,
             sequence: Arc::new(Mutex::new(0)),
@@ -415,7 +415,7 @@ where
                 ..common_entry
             },
         };
-        self.sink.write(log_entry, &*self.error_logger);
+        self.sink.write(log_entry, self.error_logger.clone());
     }
 
     fn message(bytes: &Bytes) -> proto::grpc_log_entry::Payload {
