@@ -7,7 +7,8 @@ use hyper::Body;
 use pin_project::pin_project;
 use std::marker::PhantomData;
 use std::pin::Pin;
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::{Duration, SystemTime};
 use tonic::Code;
@@ -33,7 +34,8 @@ impl<K> BinaryLoggerLayer<K, NoReflection, NopErrorLogger>
 where
     K: Sink + Send + Sync,
 {
-    /// Creates a new binary logger layer with the default predicate.
+    /// Creates a new binary logger layer with the default predicate that
+    /// logs everything except gRPC reflection requests
     pub fn new(sink: K) -> Self {
         Self {
             sink: Arc::new(sink),
@@ -99,7 +101,7 @@ where
     inner: S,
     predicate: P,
     error_logger: L,
-    next_call_id: Arc<Mutex<u64>>,
+    next_call_id: Arc<AtomicU64>,
 }
 
 impl<S, K, P, L> BinaryLoggerMiddleware<S, K, P, L>
@@ -114,14 +116,12 @@ where
             inner,
             predicate,
             error_logger,
-            next_call_id: Default::default(),
+            next_call_id: Arc::new(AtomicU64::new(1)),
         }
     }
 
     fn next_call_id(&self) -> u64 {
-        let mut counter = self.next_call_id.lock().unwrap();
-        *counter += 1;
-        *counter
+        self.next_call_id.fetch_add(1, Ordering::SeqCst)
     }
 }
 
@@ -167,7 +167,9 @@ where
                 // wrap our logger around the request stream.
                 let request = Self::logged_request(request, call.clone());
 
-                // perform the actual request.
+                // Perform the actual request.
+                // When a handler returns an error, we get an `Ok(Response(...))` here.
+                // TODO(mkm): figure out what's the right way to log an error when we get `Err` here
                 let response = inner.call(request).await?;
 
                 // wrap our logger around the response stream.
@@ -207,11 +209,17 @@ where
                             call.log(LogEntry::ClientMessage(&buf));
                         }
                         if sender.send_data(buf).await.is_err() {
+                            // TODO(mkm): figure out how to log this kind of error, if any.
+                            // The Go gRPC framework seems to either log a frame if successful
+                            // or just not log it.
                             sender.abort();
                             return;
                         }
                     }
                     Err(_err) => {
+                        // TODO(mkm): figure out how to log this kind of error, if any.
+                        // The Go gRPC framework seems to either log a frame if successful
+                        // or just not log it.
                         sender.abort();
                         return;
                     }
@@ -221,10 +229,16 @@ where
             match req_body.trailers().await {
                 Ok(Some(trailers)) => {
                     if sender.send_trailers(trailers).await.is_err() {
+                        // TODO(mkm): figure out how to log this kind of error, if any.
+                        // The Go gRPC framework seems to either log a frame if successful
+                        // or just not log it.
                         sender.abort();
                     }
                 }
                 Err(_err) => {
+                    // TODO(mkm): figure out how to log this kind of error, if any.
+                    // The Go gRPC framework seems to either log a frame if successful
+                    // or just not log it.
                     sender.abort();
                 }
                 _ => {}
@@ -329,7 +343,7 @@ where
     L: ErrorLogger<K::Error>,
 {
     call_id: u64,
-    sequence: Arc<Mutex<u64>>,
+    sequence: Arc<AtomicU64>,
     sink: Arc<K>,
     error_logger: L,
 }
@@ -342,17 +356,13 @@ where
     fn new(call_id: u64, sink: Arc<K>, error_logger: L) -> Self {
         Self {
             call_id,
-            sequence: Arc::new(Mutex::new(0)),
+            sequence: Arc::new(AtomicU64::new(1)),
             sink,
             error_logger,
         }
     }
     fn log(&self, entry: LogEntry<'_>) {
-        let sequence_id_within_call = {
-            let mut seq = self.sequence.lock().unwrap();
-            *seq += 1;
-            *seq
-        };
+        let sequence_id_within_call = self.sequence.fetch_add(1, Ordering::SeqCst);
 
         let common_entry = proto::GrpcLogEntry {
             timestamp: Some(SystemTime::now().into()),

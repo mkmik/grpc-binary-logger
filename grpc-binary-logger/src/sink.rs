@@ -11,7 +11,7 @@ pub trait Sink: Clone + Send + Sync {
     type Error;
 
     /// The sink receives a [`GrpcLogEntry`] message for every gRPC frame captured by a [`crate::BinaryLoggerLayer`].
-    /// The sink owns the log entry and is encourage to process the log in the background without blocking the logger layer.
+    /// The sink owns the log entry and is encouraged to process the log in the background without blocking the logger layer.
     /// Errors should be handled (e.g. logged) by the sink.
     fn write(&self, data: GrpcLogEntry, error_logger: impl ErrorLogger<Self::Error>);
 }
@@ -53,6 +53,11 @@ impl Sink for DebugSink {
 
 /// Write binary log entries to a writer using the gRPC binary logging "framing format" (sadly undocumented),
 /// compatible with the official gRPC implementation (C/C++/Java/Go) and with the [binlog](https://github.com/mkmik/binlog) CLI tool.
+/// The frame format consists of a `u32` length followed by that many bytes of data.
+/// ```text
+/// 4 bytes: length as a u32
+/// length bytes: <data>
+/// ```
 #[derive(Default, Debug)]
 pub struct FileSink<W>
 where
@@ -97,11 +102,11 @@ impl<W> Sink for FileSink<W>
 where
     W: io::Write + Send,
 {
-    type Error = ();
+    type Error = std::io::Error;
 
-    fn write(&self, data: GrpcLogEntry, _error_logger: impl ErrorLogger<Self::Error>) {
-        if let Err(e) = self.write_log_entry(&data) {
-            eprintln!("error writing binary log: {:?}", e);
+    fn write(&self, data: GrpcLogEntry, error_logger: impl ErrorLogger<Self::Error>) {
+        if let Err(error) = self.write_log_entry(&data) {
+            error_logger.log_error(error);
         }
     }
 }

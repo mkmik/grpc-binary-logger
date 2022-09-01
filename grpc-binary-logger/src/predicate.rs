@@ -1,6 +1,6 @@
 use http_body::Body;
 
-/// A [`Predicate`] allows to filter requests before they get processed by a [`crate::Sink`].
+/// A [`Predicate`] allows filtering requests before they get processed by a [`crate::Sink`].
 pub trait Predicate: Clone {
     /// If this method returns true, the logger layer will capture gRPC frames for this request
     /// and send them to a [`crate::Sink`].
